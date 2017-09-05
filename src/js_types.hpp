@@ -223,7 +223,7 @@ struct Object {
             return Value<T>::validated_to_##type(ctx, get_property(ctx, object, key), std::string(key).c_str()); \
         } \
         catch (std::invalid_argument &e) { \
-            throw message ? std::invalid_argument(message) : e; \
+            throw message ? std::invalid_argument(util::format("Failed to read %1: %2", message, e.what())) : e; \
         } \
     } \
     static return_t validated_get_##type(ContextType ctx, const ObjectType &object, uint32_t index, const char *message = nullptr) { \
@@ -231,7 +231,7 @@ struct Object {
             return Value<T>::validated_to_##type(ctx, get_property(ctx, object, index)); \
         } \
         catch (std::invalid_argument &e) { \
-            throw message ? std::invalid_argument(message) : e; \
+            throw message ? std::invalid_argument(util::format("Failed to read %1: %2", message, e.what())) : e; \
         } \
     }
 
