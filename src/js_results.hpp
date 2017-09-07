@@ -266,23 +266,19 @@ void ResultsClass<T>::add_listener(ContextType ctx, FunctionType, ObjectType thi
 }
 
 template<typename T>
-void ResultsClass<T>::remove_listener(ContextType ctx, FunctionType, ObjectType this_object, size_t argc, const ValueType arguments[], ReturnValue &return_value) {
+void ResultsClass<T>::remove_listener(ContextType ctx, FunctionType, ObjectType this_object,
+                                      size_t argc, const ValueType arguments[], ReturnValue &) {
     validate_argument_count(argc, 1);
     
     auto results = get_internal<T, ResultsClass<T>>(this_object);
     auto callback = Value::validated_to_function(ctx, arguments[0]);
     auto protected_function = Protected<FunctionType>(ctx, callback);
-    
-    auto iter = results->m_notification_tokens.begin();
-    typename Protected<FunctionType>::Comparator compare;
-    while (iter != results->m_notification_tokens.end()) {
-        if(compare(iter->first, protected_function)) {
-            iter = results->m_notification_tokens.erase(iter);
-        }
-        else {
-            iter++;
-        }
-    }
+
+    auto& tokens = results->m_notification_tokens;
+    auto compare = [&](auto&& token) {
+        return typename Protected<FunctionType>::Comparator()(token.first, protected_function);
+    };
+    tokens.erase(std::remove_if(tokens.begin(), tokens.end(), compare), tokens.end());
 }
 
 template<typename T>
