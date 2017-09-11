@@ -47,12 +47,19 @@ public:
     using OptionalValue = util::Optional<ValueType>;
 
     NativeAccessor(ContextType ctx, std::shared_ptr<Realm> realm, const ObjectSchema& object_schema)
-    : m_ctx(ctx), m_realm(std::move(realm)), m_object_schema(object_schema) { }
+    : m_ctx(ctx), m_realm(std::move(realm)), m_object_schema(&object_schema) { }
+
+    template<typename Collection>
+    NativeAccessor(ContextType ctx, Collection const& collection)
+    : m_ctx(ctx)
+    , m_realm(collection.get_realm())
+    , m_object_schema(collection.get_type() == realm::PropertyType::Object ? &collection.get_object_schema() : nullptr)
+    { }
 
     NativeAccessor(NativeAccessor& parent, const Property& prop)
     : m_ctx(parent.m_ctx)
     , m_realm(parent.m_realm)
-    , m_object_schema(*m_realm->schema().find(prop.object_type))
+    , m_object_schema(&*m_realm->schema().find(prop.object_type))
     { }
 
     OptionalValue value_for_property(ValueType dict, std::string const& prop_name, size_t prop_index) {
@@ -61,9 +68,9 @@ public:
             return util::none;
         }
         ValueType value = Object::get_property(m_ctx, object, prop_name);
-        const auto& prop = m_object_schema.persisted_properties[prop_index];
+        const auto& prop = m_object_schema->persisted_properties[prop_index];
         if (!Value::is_valid_for_property(m_ctx, value, prop)) {
-            throw TypeErrorException(m_object_schema.name, prop.name,
+            throw TypeErrorException(m_object_schema->name, prop.name,
                                      js_type_name_for_property_type(prop.type),
                                      print(value));
         }
@@ -79,6 +86,14 @@ public:
     template<typename T>
     T unbox(ValueType value, bool create = false, bool update = false);
 
+    template<typename T>
+    util::Optional<T> unbox_optional(ValueType value) {
+        return is_null(value) ? util::none : util::make_optional(unbox<T>(value));
+    }
+
+    template<typename T>
+    ValueType box(util::Optional<T> v) { return v ? box(*v) : null_value(); }
+
     ValueType box(bool boolean)      { return Value::from_boolean(m_ctx, boolean); }
     ValueType box(int64_t number)    { return Value::from_number(m_ctx, number); }
     ValueType box(float number)      { return Value::from_number(m_ctx, number); }
@@ -88,10 +103,14 @@ public:
     ValueType box(Mixed)             { throw std::runtime_error("'Any' type is unsupported"); }
 
     ValueType box(Timestamp ts) {
-        return Object::create_date(m_ctx, ts.get_seconds() * 1000 + ts.get_nanoseconds() / 1000000);
+        return ts.is_null() ? null_value()
+                            : Object::create_date(m_ctx, ts.get_seconds() * 1000 + ts.get_nanoseconds() / 1000000);
     }
     ValueType box(realm::Object realm_object) {
         return RealmObjectClass<JSEngine>::create_instance(m_ctx, std::move(realm_object));
+    }
+    ValueType box(RowExpr row) {
+        return RealmObjectClass<JSEngine>::create_instance(m_ctx, realm::Object(m_realm, *m_object_schema, row));
     }
     ValueType box(realm::List list) {
         return ListClass<JSEngine>::create_instance(m_ctx, std::move(list));
@@ -112,7 +131,7 @@ public:
         auto obj = Value::validated_to_object(m_ctx, value);
         uint32_t size = Object::validated_get_length(m_ctx, obj);
         for (uint32_t i = 0; i < size; ++i) {
-            func(Object::validated_get_object(m_ctx, obj, i));
+            func(Object::get_property(m_ctx, obj, i));
         }
     }
 
@@ -133,7 +152,7 @@ public:
 private:
     ContextType m_ctx;
     std::shared_ptr<Realm> m_realm;
-    const ObjectSchema& m_object_schema;
+    const ObjectSchema* m_object_schema;
     std::string m_string_buffer;
     OwnedBinaryData m_owned_binary_data;
 
@@ -173,34 +192,37 @@ struct Unbox<JSEngine, double> {
 template<typename JSEngine>
 struct Unbox<JSEngine, util::Optional<bool>> {
     static util::Optional<bool> call(NativeAccessor<JSEngine> *ctx, typename JSEngine::Value const& value, bool, bool) {
-        return js::Value<JSEngine>::validated_to_boolean(ctx->m_ctx, value, "Property");
+        return ctx->template unbox_optional<bool>(value);
 }
 };
 
 template<typename JSEngine>
 struct Unbox<JSEngine, util::Optional<int64_t>> {
     static util::Optional<int64_t> call(NativeAccessor<JSEngine> *ctx, typename JSEngine::Value const& value, bool, bool) {
-        return js::Value<JSEngine>::validated_to_number(ctx->m_ctx, value, "Property");
+        return ctx->template unbox_optional<int64_t>(value);
 }
 };
 
 template<typename JSEngine>
 struct Unbox<JSEngine, util::Optional<float>> {
     static util::Optional<float> call(NativeAccessor<JSEngine> *ctx, typename JSEngine::Value const& value, bool, bool) {
-        return js::Value<JSEngine>::validated_to_number(ctx->m_ctx, value, "Property");
+        return ctx->template unbox_optional<float>(value);
 }
 };
 
 template<typename JSEngine>
 struct Unbox<JSEngine, util::Optional<double>> {
     static util::Optional<double> call(NativeAccessor<JSEngine> *ctx, typename JSEngine::Value const& value, bool, bool) {
-        return js::Value<JSEngine>::validated_to_number(ctx->m_ctx, value, "Property");
+        return ctx->template unbox_optional<double>(value);
 }
 };
 
 template<typename JSEngine>
 struct Unbox<JSEngine, StringData> {
     static StringData call(NativeAccessor<JSEngine> *ctx, typename JSEngine::Value const& value, bool, bool) {
+        if (ctx->is_null(value)) {
+            return StringData();
+        }
         ctx->m_string_buffer = js::Value<JSEngine>::validated_to_string(ctx->m_ctx, value, "Property");
         return ctx->m_string_buffer;
     }
@@ -209,6 +231,9 @@ struct Unbox<JSEngine, StringData> {
 template<typename JSEngine>
 struct Unbox<JSEngine, BinaryData> {
     static BinaryData call(NativeAccessor<JSEngine> *ctx, typename JSEngine::Value value, bool, bool) {
+        if (ctx->is_null(value)) {
+            return BinaryData();
+        }
         ctx->m_owned_binary_data = js::Value<JSEngine>::validated_to_binary(ctx->m_ctx, value, "Property");
         return ctx->m_owned_binary_data.get();
     }
@@ -224,6 +249,9 @@ struct Unbox<JSEngine, Mixed> {
 template<typename JSEngine>
 struct Unbox<JSEngine, Timestamp> {
     static Timestamp call(NativeAccessor<JSEngine> *ctx, typename JSEngine::Value const& value, bool, bool) {
+        if (ctx->is_null(value)) {
+            return Timestamp();
+        }
         auto date = js::Value<JSEngine>::validated_to_date(ctx->m_ctx, value, "Property");
         double milliseconds = js::Value<JSEngine>::to_number(ctx->m_ctx, date);
         int64_t seconds = milliseconds / 1000;
@@ -253,10 +281,10 @@ struct Unbox<JSEngine, RowExpr> {
         }
 
         if (Value::is_array(ctx->m_ctx, object)) {
-            object = Schema<JSEngine>::dict_for_property_array(ctx->m_ctx, ctx->m_object_schema, object);
+            object = Schema<JSEngine>::dict_for_property_array(ctx->m_ctx, *ctx->m_object_schema, object);
         }
 
-        auto child = realm::Object::create<ValueType>(*ctx, ctx->m_realm, ctx->m_object_schema,
+        auto child = realm::Object::create<ValueType>(*ctx, ctx->m_realm, *ctx->m_object_schema,
                                                       static_cast<ValueType>(object), try_update);
         return child.row();
     }

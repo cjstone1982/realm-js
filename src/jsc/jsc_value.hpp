@@ -124,7 +124,7 @@ inline JSValueRef jsc::Value::from_number(JSContextRef ctx, double number) {
 }
 
 template<>
-inline JSValueRef jsc::Value::from_string(JSContextRef ctx, const jsc::String &string) {
+inline JSValueRef jsc::Value::from_nonnull_string(JSContextRef ctx, const jsc::String &string) {
     return JSValueMakeString(ctx, string);
 }
 
@@ -134,7 +134,7 @@ inline JSValueRef jsc::Value::from_undefined(JSContextRef ctx) {
 }
 
 template<>
-JSValueRef jsc::Value::from_binary(JSContextRef ctx, BinaryData data);
+JSValueRef jsc::Value::from_nonnull_binary(JSContextRef ctx, BinaryData data);
 
 template<>
 inline bool jsc::Value::to_boolean(JSContextRef ctx, const JSValueRef &value) {

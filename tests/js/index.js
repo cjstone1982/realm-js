@@ -50,6 +50,8 @@ if (isNodeProcess) {
     //TESTS.AsyncTests = node_require('./async-tests');
 }
 
+TESTS = { ListTests: TESTS.ListTests }
+
 var SPECIAL_METHODS = {
     beforeEach: true,
     afterEach: true,

@@ -21,14 +21,17 @@
 module.exports = {
     assertSimilar: function(type, val1, val2, errorMessage, depth) {
         depth = depth || 0;
-        if (type == 'float' || type == 'double') {
+        if (val2 === null) {
+            this.assertNull(val1, errorMessage, depth + 1);
+        }
+        else if (type == 'float' || type == 'double') {
             this.assertEqualWithTolerance(val1, val2, errorMessage, depth + 1);
         }
         else if (type == 'data') {
             this.assertArraysEqual(new Uint8Array(val1), val2, errorMessage, depth + 1);
         }
         else if (type == 'date') {
-            this.assertEqual(val1.getTime(), val2.getTime(), errorMessage, depth + 1);
+            this.assertEqual(val1 && val1.getTime(), val2.getTime(), errorMessage, depth + 1);
         }
         else {
             this.assertEqual(val1, val2, errorMessage, depth + 1);
@@ -79,6 +82,8 @@ module.exports = {
     },
 
     assertArraysEqual: function(val1, val2, errorMessage, depth) {
+        this.assertDefined(val1, `val1 should be non-null but is ${val1}`, 1 + (depth || 0),);
+        this.assertDefined(val2, `val2 should be non-null but is ${val2}`, 1 + (depth || 0));
         const len1 = val1.length;
         const len2 = val2.length;
 
@@ -135,9 +140,33 @@ module.exports = {
         }
     },
 
+    assertThrowsContaining: function(func, expectedMessage) {
+        var caught = false;
+        try {
+            func();
+        }
+        catch (e) {
+            caught = true;
+            if (!e.message.includes(expectedMessage)) {
+                throw new TestFailureError(`Expected exception "${expectedMessage}" not thrown - instead caught: "${e}"`);
+            }
+        }
+
+        if (!caught) {
+            throw new TestFailureError(`Expected exception "${expectedMessage}" not thrown`);
+        }
+    },
+
+
     assertTrue: function(condition, errorMessage, depth) {
         if (!condition) {
             throw new TestFailureError(errorMessage || `Condition ${condition} expected to be true`, depth);
+        }
+    },
+
+    assertFalse: function(condition, errorMessage, depth) {
+        if (condition) {
+            throw new TestFailureError(errorMessage || `Condition ${condition} expected to be false`, depth);
         }
     },
 
@@ -149,6 +178,12 @@ module.exports = {
 
     assertType: function(value, type, depth) {
         this.assertEqual(typeof value, type, `Value ${value} expected to be of type ${type}`, 1 + depth || 0);
+    },
+
+    assertDefined: function(value, errorMessage, depth) {
+        if (value === undefined || value === null) {
+            throw new TestFailureError(errorMessage || `Value ${value} expected to be non-null`, depth);
+        }
     },
 
     assertUndefined: function(value, errorMessage, depth) {

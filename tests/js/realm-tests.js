@@ -308,9 +308,25 @@ module.exports = {
     },
 
     testRealmCreateUpsert: function() {
-        var realm = new Realm({schema: [schemas.IntPrimary, schemas.StringPrimary, schemas.AllTypes, schemas.TestObject, schemas.LinkToAllTypes]});
+        exports.AllTypes = {
+    name: 'AllTypesObject',
+    primaryKey: 'primaryCol',
+    properties: {
+        primaryCol:        'string',
+        boolCol:           'bool',
+        intCol:            'int',
+        floatCol:          'float',
+        doubleCol:         'double',
+        stringCol:         'string',
+        dateCol:           'date',
+        dataCol:           'data',
+        objectCol:         'TestObject',
+        arrayCol:          {type: 'list', objectType: 'TestObject'},
+    }
+};
+        const realm = new Realm({schema: [AllTypes, schemas.TestObject]});
         realm.write(function() {
-            var values = {
+            const values = {
                 primaryCol: '0',
                 boolCol:    true,
                 intCol:     1,
@@ -323,13 +339,13 @@ module.exports = {
                 arrayCol:   [],
             };
 
-            var obj0 = realm.create('AllTypesObject', values);
+            const obj0 = realm.create('AllTypesObject', values);
 
             TestCase.assertThrows(function() {
                 realm.create('AllTypesObject', values);
             }, 'cannot create object with conflicting primary key');
 
-            var obj1 = realm.create('AllTypesObject', {
+            const obj1 = realm.create('AllTypesObject', {
                 primaryCol: '1',
                 boolCol:    false,
                 intCol:     2,
@@ -342,7 +358,7 @@ module.exports = {
                 arrayCol:   [{doubleCol: 2}],
             }, true);
 
-            var objects = realm.objects('AllTypesObject');
+            const objects = realm.objects('AllTypesObject');
             TestCase.assertEqual(objects.length, 2);
 
             realm.create('AllTypesObject', {
@@ -397,7 +413,7 @@ module.exports = {
             TestCase.assertEqual(obj1.objectCol, null);
 
             // test with string primaries
-            var obj =realm.create('StringPrimaryObject', {
+            const obj = realm.create('StringPrimaryObject', {
                 primaryCol: '0',
                 valueCol: 0
             });
@@ -825,8 +841,9 @@ module.exports = {
     },
 
     testSchema: function() {
-        var originalSchema = [schemas.TestObject, schemas.BasicTypes, schemas.NullableBasicTypes, schemas.IndexedTypes, schemas.IntPrimary,
-            schemas.PersonObject, schemas.LinkTypes, schemas.LinkingObjectsObject];
+        var originalSchema = [schemas.TestObject, schemas.AllTypes, schemas.LinkToAllTypes,
+                              schemas.IndexedTypes, schemas.IntPrimary, schemas.PersonObject,
+                              schemas.LinkTypes, schemas.LinkingObjectsObject];
 
         var schemaMap = {};
         originalSchema.forEach(function(objectSchema) {

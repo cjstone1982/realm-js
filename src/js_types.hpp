@@ -64,7 +64,7 @@ struct String {
     String(const char *);
     String(const StringType &);
     String(StringType &&);
-    String(const std::string &);
+    String(StringData);
 
     operator StringType() const;
     operator std::string() const;
@@ -120,8 +120,12 @@ struct Value {
     static ValueType from_boolean(ContextType, bool);
     static ValueType from_null(ContextType);
     static ValueType from_number(ContextType, double);
-    static ValueType from_string(ContextType, const String<T> &);
-    static ValueType from_binary(ContextType, BinaryData);
+    static ValueType from_string(ContextType ctx, const char *s) { return s ? from_nonnull_string(ctx, s) : from_null(ctx); }
+    static ValueType from_string(ContextType ctx, StringData s) { return s ? from_nonnull_string(ctx, s) : from_null(ctx); }
+    static ValueType from_string(ContextType ctx, const std::string& s) { return from_nonnull_string(ctx, s.c_str()); }
+    static ValueType from_binary(ContextType ctx, BinaryData b) { return b ? from_nonnull_binary(ctx, b) : from_null(ctx); }
+    static ValueType from_nonnull_string(ContextType, const String<T>&);
+    static ValueType from_nonnull_binary(ContextType, BinaryData);
     static ValueType from_undefined(ContextType);
 
     static ObjectType to_array(ContextType, const ValueType &);
@@ -357,7 +361,7 @@ inline bool Value<T>::is_valid_for_property(ContextType context, const ValueType
     using realm::PropertyType;
     if (realm::is_array(prop.type)) {
         if (prop.type != PropertyType::Object) {
-            return false;
+            return is_array(context, value); // FIXME
         }
 
         // FIXME: Do we need to validate the types of the contained objects?

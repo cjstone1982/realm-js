@@ -59,6 +59,8 @@ struct ListClass : ClassDefinition<T, realm::js::List<T>, CollectionClass<T>> {
 
     // properties
     static void get_length(ContextType, ObjectType, ReturnValue &);
+    static void get_type(ContextType, ObjectType, ReturnValue &);
+    static void get_optional(ContextType, ObjectType, ReturnValue &);
     static void get_index(ContextType, ObjectType, uint32_t, ReturnValue &);
     static bool set_index(ContextType, ObjectType, uint32_t, ValueType);
 
@@ -99,6 +101,8 @@ struct ListClass : ClassDefinition<T, realm::js::List<T>, CollectionClass<T>> {
 
     PropertyMap<T> const properties = {
         {"length", {wrap<get_length>, nullptr}},
+        {"type", {wrap<get_type>, nullptr}},
+        {"optional", {wrap<get_optional>, nullptr}},
     };
 
     IndexPropertyType<T> const index_accessor = {wrap<get_index>, wrap<set_index>};
@@ -116,17 +120,28 @@ void ListClass<T>::get_length(ContextType, ObjectType object, ReturnValue &retur
 }
 
 template<typename T>
+void ListClass<T>::get_type(ContextType, ObjectType object, ReturnValue &return_value) {
+    auto list = get_internal<T, ListClass<T>>(object);
+    return_value.set(string_for_property_type(list->get_type() & ~realm::PropertyType::Flags));
+}
+
+template<typename T>
+void ListClass<T>::get_optional(ContextType, ObjectType object, ReturnValue &return_value) {
+    auto list = get_internal<T, ListClass<T>>(object);
+    return_value.set(is_nullable(list->get_type()));
+}
+
+template<typename T>
 void ListClass<T>::get_index(ContextType ctx, ObjectType object, uint32_t index, ReturnValue &return_value) {
     auto list = get_internal<T, ListClass<T>>(object);
-    auto realm_object = realm::Object(list->get_realm(), list->get_object_schema(), list->get(index));
-
-    return_value.set(RealmObjectClass<T>::create_instance(ctx, std::move(realm_object)));
+    NativeAccessor<T> accessor(ctx, *list);
+    return_value.set(list->get(accessor, index));
 }
 
 template<typename T>
 bool ListClass<T>::set_index(ContextType ctx, ObjectType object, uint32_t index, ValueType value) {
     auto list = get_internal<T, ListClass<T>>(object);
-    NativeAccessor<T> accessor(ctx, list->get_realm(), list->get_object_schema());
+    NativeAccessor<T> accessor(ctx, *list);
     list->set(accessor, index, value);
     return true;
 }
@@ -136,7 +151,7 @@ void ListClass<T>::push(ContextType ctx, FunctionType, ObjectType this_object, s
     validate_argument_count_at_least(argc, 1);
 
     auto list = get_internal<T, ListClass<T>>(this_object);
-    NativeAccessor<T> accessor(ctx, list->get_realm(), list->get_object_schema());
+    NativeAccessor<T> accessor(ctx, *list);
     for (size_t i = 0; i < argc; i++) {
         list->add(accessor, arguments[i]);
     }
@@ -149,17 +164,14 @@ void ListClass<T>::pop(ContextType ctx, FunctionType, ObjectType this_object, si
     validate_argument_count(argc, 0);
 
     auto list = get_internal<T, ListClass<T>>(this_object);
-    size_t size = list->size();
+    auto size = static_cast<unsigned int>(list->size());
     if (size == 0) {
         list->verify_in_transaction();
         return_value.set_undefined();
     }
     else {
-        size_t index = size - 1;
-        auto realm_object = realm::Object(list->get_realm(), list->get_object_schema(), list->get(index));
-
-        return_value.set(RealmObjectClass<T>::create_instance(ctx, std::move(realm_object)));
-        list->remove(index);
+        get_index(ctx, this_object, size - 1, return_value);
+        list->remove(size - 1);
     }
 }
 
@@ -168,7 +180,7 @@ void ListClass<T>::unshift(ContextType ctx, FunctionType, ObjectType this_object
     validate_argument_count_at_least(argc, 1);
 
     auto list = get_internal<T, ListClass<T>>(this_object);
-    NativeAccessor<T> accessor(ctx, list->get_realm(), list->get_object_schema());
+    NativeAccessor<T> accessor(ctx, *list);
     for (size_t i = 0; i < argc; i++) {
         list->insert(accessor, i, arguments[i]);
     }
@@ -186,9 +198,7 @@ void ListClass<T>::shift(ContextType ctx, FunctionType, ObjectType this_object, 
         return_value.set_undefined();
     }
     else {
-        auto realm_object = realm::Object(list->get_realm(), list->get_object_schema(), list->get(0));
-
-        return_value.set(RealmObjectClass<T>::create_instance(ctx, std::move(realm_object)));
+        get_index(ctx, this_object, 0, return_value);
         list->remove(0);
     }
 }
@@ -216,11 +226,9 @@ void ListClass<T>::splice(ContextType ctx, FunctionType, ObjectType this_object,
     std::vector<ValueType> removed_objects;
     removed_objects.reserve(remove);
 
-    NativeAccessor<T> accessor(ctx, list->get_realm(), list->get_object_schema());
+    NativeAccessor<T> accessor(ctx, *list);
     for (size_t i = 0; i < remove; i++) {
-        auto realm_object = realm::Object(list->get_realm(), list->get_object_schema(), list->get(index));
-
-        removed_objects.push_back(RealmObjectClass<T>::create_instance(ctx, std::move(realm_object)));
+        removed_objects.push_back(list->get(accessor, index));
         list->remove(index);
     }
     for (size_t i = 2; i < argc; i++) {

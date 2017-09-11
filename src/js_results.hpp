@@ -133,11 +133,14 @@ typename T::Object ResultsClass<T>::create_filtered(ContextType ctx, const U &co
 template<typename T>
 std::vector<std::pair<std::string, bool>>
 ResultsClass<T>::get_keypaths(ContextType ctx, size_t argc, const ValueType arguments[]) {
-    validate_argument_count(argc, 1, 2);
+    validate_argument_count(argc, 0, 2);
 
     std::vector<std::pair<std::string, bool>> sort_order;
+    if (argc == 0) {
+        return sort_order;
+    }
 
-    if (argc > 0 && Value::is_array(ctx, arguments[0])) {
+    if (Value::is_array(ctx, arguments[0])) {
         validate_argument_count(argc, 1, "Second argument is not allowed if passed an array of sort descriptors");
 
         ObjectType js_prop_names = Value::validated_to_object(ctx, arguments[0]);
@@ -158,8 +161,14 @@ ResultsClass<T>::get_keypaths(ContextType ctx, size_t argc, const ValueType argu
         }
     }
     else {
-        sort_order.emplace_back(Value::validated_to_string(ctx, arguments[0]),
-                                argc == 1 || !Value::to_boolean(ctx, arguments[1]));
+        validate_argument_count(argc, 1, 2);
+        if (Value::is_boolean(ctx, arguments[0])) {
+            sort_order.emplace_back("self", !Value::to_boolean(ctx, arguments[0]));
+        }
+        else {
+            sort_order.emplace_back(Value::validated_to_string(ctx, arguments[0]),
+                                    argc == 1 || !Value::to_boolean(ctx, arguments[1]));
+        }
     }
     return sort_order;
 }

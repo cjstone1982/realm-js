@@ -18,34 +18,79 @@
 
 'use strict';
 
-var Realm = require('realm');
-var TestCase = require('./asserts');
-var schemas = require('./schemas');
+const realm = require('realm');
+let TestCase = require('./asserts');
+let schemas = require('./schemas');
+
+const DATA1 = new Uint8Array([0x01]);
+const DATA2 = new Uint8Array([0x02]);
+const DATA3 = new Uint8Array([0x03]);
+const DATE1 = new Date(1);
+const DATE2 = new Date(2);
+const DATE3 = new Date(3);
 
 module.exports = {
     testListConstructor: function() {
-        var realm = new Realm({schema: [schemas.PersonObject, schemas.PersonList]});
+        const realm = new Realm({schema: [schemas.PersonObject, schemas.PersonList]});
 
-        realm.write(function() {
-            var obj = realm.create('PersonList', {list: []});
-            TestCase.assertTrue(obj.list instanceof Realm.List);
-            TestCase.assertTrue(obj.list instanceof Realm.Collection);
+        realm.write(() => {
+            let obj = realm.create('PersonList', {list: []});
+            TestCase.assertInstanceOf(obj.list, Realm.List);
+            TestCase.assertInstanceOf(obj.list, Realm.Collection);
         });
 
-        TestCase.assertThrows(function() {
-            new Realm.List();
+        TestCase.assertThrowsContaining(() => new Realm.List(),
+                                        'function is not a constructor');
+
+        TestCase.assertType(Realm.List, 'function');
+        TestCase.assertInstanceOf(Realm.List, Function);
+    },
+
+    testListType: function() {
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject, schemas.PrimitiveArrays]});
+
+        let obj, prim;
+        realm.write(() => {
+            obj = realm.create('LinkTypesObject', {});
+            prim = realm.create('PrimitiveArrays', {});
         });
 
-        TestCase.assertEqual(typeof Realm.List, 'function');
-        TestCase.assertTrue(Realm.List instanceof Function);
+        TestCase.assertEqual(obj.arrayCol.type, 'object');
+        TestCase.assertEqual(obj.arrayCol1.type, 'object');
+
+        TestCase.assertEqual(prim.bool.type, 'bool');
+        TestCase.assertEqual(prim.int.type, 'int');
+        TestCase.assertEqual(prim.float.type, 'float');
+        TestCase.assertEqual(prim.double.type, 'double');
+        TestCase.assertEqual(prim.string.type, 'string');
+        TestCase.assertEqual(prim.date.type, 'date');
+        TestCase.assertEqual(prim.optBool.type, 'bool');
+        TestCase.assertEqual(prim.optInt.type, 'int');
+        TestCase.assertEqual(prim.optFloat.type, 'float');
+        TestCase.assertEqual(prim.optDouble.type, 'double');
+        TestCase.assertEqual(prim.optString.type, 'string');
+        TestCase.assertEqual(prim.optDate.type, 'date');
+
+        TestCase.assertFalse(prim.bool.optional);
+        TestCase.assertFalse(prim.int.optional);
+        TestCase.assertFalse(prim.float.optional);
+        TestCase.assertFalse(prim.double.optional);
+        TestCase.assertFalse(prim.string.optional);
+        TestCase.assertFalse(prim.date.optional);
+        TestCase.assertTrue(prim.optBool.optional);
+        TestCase.assertTrue(prim.optInt.optional);
+        TestCase.assertTrue(prim.optFloat.optional);
+        TestCase.assertTrue(prim.optDouble.optional);
+        TestCase.assertTrue(prim.optString.optional);
+        TestCase.assertTrue(prim.optDate.optional);
     },
 
     testListLength: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}],
@@ -60,94 +105,248 @@ module.exports = {
             obj.arrayCol = [{doubleCol: 1}, {doubleCol: 2}];
             TestCase.assertEqual(array.length, 2);
 
-            TestCase.assertThrows(function() {
-                array.length = 0;
-            }, 'cannot set length property on lists');
+            TestCase.assertThrowsContaining(() => array.length = 0,
+                                            "Cannot assign to read only property 'length'");
         });
 
         TestCase.assertEqual(array.length, 2);
     },
 
     testListSubscriptGetters: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject, schemas.PrimitiveArrays]});
+        let obj, prim;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}, {doubleCol: 4}],
+                arrayCol1: [{doubleCol: 5}, {doubleCol: 6}],
             });
+            prim = realm.create('PrimitiveArrays', {
+                bool:   [true, false],
+                int:    [1, 2],
+                float:  [1.1, 2.2],
+                double: [1.11, 2.22],
+                string: ['a', 'b'],
+                date:   [new Date(1), new Date(2)],
+                data:   [DATA1, DATA2],
 
-            array = obj.arrayCol;
+                optBool:   [true, null],
+                optInt:    [1, null],
+                optFloat:  [1.1, null],
+                optDouble: [1.11, null],
+                optString: ['a', null],
+                optDate:   [new Date(1), null],
+                optData:   [DATA1, null],
+            });
         });
 
-        TestCase.assertEqual(array[0].doubleCol, 3);
-        TestCase.assertEqual(array[1].doubleCol, 4);
-        TestCase.assertEqual(array[2], undefined);
-        TestCase.assertEqual(array[-1], undefined);
+        TestCase.assertEqual(obj.arrayCol[0].doubleCol, 3);
+        TestCase.assertEqual(obj.arrayCol[1].doubleCol, 4);
+        TestCase.assertEqual(obj.arrayCol[2], undefined);
+        TestCase.assertEqual(obj.arrayCol[-1], undefined);
+        TestCase.assertEqual(obj.arrayCol['foo'], undefined);
+
+        TestCase.assertEqual(obj.arrayCol1[0].doubleCol, 5);
+        TestCase.assertEqual(obj.arrayCol1[1].doubleCol, 6);
+        TestCase.assertEqual(obj.arrayCol1[2], undefined);
+        TestCase.assertEqual(obj.arrayCol1[-1], undefined);
+        TestCase.assertEqual(obj.arrayCol1['foo'], undefined);
+
+        for (let field of Object.keys(prim)) {
+            TestCase.assertEqual(prim[field][2], undefined);
+            TestCase.assertEqual(prim[field][-1], undefined);
+            TestCase.assertEqual(prim[field]['foo'], undefined);
+            if (field.includes('opt')) {
+                TestCase.assertEqual(prim[field][1], null);
+            }
+        }
+
+        TestCase.assertEqual(prim.bool[0], true);
+        TestCase.assertEqual(prim.bool[1], false);
+        TestCase.assertEqual(prim.int[0], 1);
+        TestCase.assertEqual(prim.int[1], 2);
+        TestCase.assertEqual(prim.float[0], 1.1);
+        TestCase.assertEqual(prim.float[1], 2.2);
+        TestCase.assertEqual(prim.double[0], 1.11);
+        TestCase.assertEqual(prim.double[1], 2.22);
+        TestCase.assertEqual(prim.string[0], 'a');
+        TestCase.assertEqual(prim.string[1], 'b');
+        TestCase.assertEqual(prim.data[0], DATA1);
+        TestCase.assertEqual(prim.data[1], DATA2);
+        TestCase.assertEqual(prim.date[0], new Date(1));
+        TestCase.assertEqual(prim.date[1], new Date(2));
+
+        TestCase.assertEqual(prim.optBool[0], true);
+        TestCase.assertEqual(prim.optInt[0], 1);
+        TestCase.assertEqual(prim.optFloat[0], 1.1);
+        TestCase.assertEqual(prim.optDouble[0], 1.11);
+        TestCase.assertEqual(prim.optString[0], 'a');
+        TestCase.assertEqual(prim.optData[0], DATA1);
+        TestCase.assertEqual(prim.optDate[0], new Date(1));
     },
 
     testListSubscriptSetters: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject,
+                                          schemas.PrimitiveArrays]});
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}, {doubleCol: 4}],
             });
-
+            let prim = realm.create('PrimitiveArrays', {});
             array = obj.arrayCol;
+
             array[0] = {doubleCol: 5};
             array[1] = {doubleCol: 6};
-
             TestCase.assertEqual(array[0].doubleCol, 5);
             TestCase.assertEqual(array[1].doubleCol, 6);
 
             array[0] = obj.objectCol;
             array[1] = obj.objectCol1;
-
             TestCase.assertEqual(array[0].doubleCol, 1);
             TestCase.assertEqual(array[1].doubleCol, 2);
 
-            TestCase.assertThrows(function() {
-                array[2] = {doubleCol: 1};
-            }, 'cannot set list item beyond its bounds');
+            TestCase.assertThrowsContaining(() => array[0] = null,
+                                            "JS value must be of type 'object', got (null)");
+            TestCase.assertThrowsContaining(() => array[0] = {},
+                                            "Missing value for property 'TestObject.doubleCol'");
+            TestCase.assertThrowsContaining(() => array[0] = {foo: 'bar'},
+                                            "Missing value for property 'TestObject.doubleCol'");
+            TestCase.assertThrowsContaining(() => array[0] = prim,
+                                            "Object of type (PrimitiveArrays) does not match List type (TestObject)");
+            TestCase.assertThrowsContaining(() => array[0] = array,
+                                            "Missing value for property 'TestObject.doubleCol'");
+            TestCase.assertThrowsContaining(() => array[2] = {doubleCol: 1},
+                                            "Requested index 2 greater than max 1");
+            TestCase.assertThrowsContaining(() => array[-1] = {doubleCol: 1},
+                                            "Index true cannot be greater than 4294967295."); // FIXME: lol
 
-            TestCase.assertThrows(function() {
-                array[-1] = {doubleCol: 1};
-            }, 'cannot set list item with negative index');
+            array['foo'] = 'bar';
+            TestCase.assertEqual(array.foo, 'bar');
+
+            // FIXME: prim
         });
 
-        TestCase.assertThrows(function() {
-            array[0] = {doubleCol: 1};
-        }, 'cannot set list item outside write transaction');
+        TestCase.assertThrowsContaining(() => array[0] = {doubleCol: 1},
+                                        "Cannot modify managed objects outside of a write transaction.");
+
+        array['foo'] = 'baz';
+        TestCase.assertEqual(array.foo, 'baz');
     },
 
-    testListInvalidProperty: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+    testListAssignment: function() {
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject,
+                                          schemas.PersonList, schemas.PersonObject,
+                                          schemas.PrimitiveArrays]});
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
-                objectCol: {doubleCol: 1},
-                objectCol1: {doubleCol: 2},
-                arrayCol: [{doubleCol: 3}, {doubleCol: 4}],
-            });
+        let obj, prim;
+        realm.write(() => {
+            obj = realm.create('LinkTypesObject', {});
+            prim = realm.create('PrimitiveArrays', {});
+            let person = realm.create('PersonObject', {name: 'a', age: 2.0});
+            let personList = realm.create('PersonList', {list: [person]}).list;
 
-            array = obj.arrayCol;
+            TestCase.assertThrowsContaining(() => obj.arrayCol = [0],
+                                            "JS value must be of type 'object', got (0)");
+            TestCase.assertThrowsContaining(() => obj.arrayCol = [null],
+                                            "JS value must be of type 'object', got (null)");
+            TestCase.assertThrowsContaining(() => obj.arrayCol = [person],
+                                            "Object of type (PersonObject) does not match List type (TestObject)");
+            TestCase.assertThrowsContaining(() => obj.arrayCol = personList,
+                                            "Object of type (PersonObject) does not match List type (TestObject)");
+            obj.arrayCol = [realm.create('TestObject', {doubleCol: 1.0})]
+            TestCase.assertEqual(obj.arrayCol[0].doubleCol, 1.0);
+            obj.arrayCol = obj.arrayCol;
+            TestCase.assertEqual(obj.arrayCol[0].doubleCol, 1.0);
+
+            TestCase.assertThrowsContaining(() => prim.bool = [person],
+                                            "Property must be of type 'boolean', got (a)");
+            TestCase.assertThrowsContaining(() => prim.int = [person],
+                                            "Property must be of type 'number', got (a)");
+            TestCase.assertThrowsContaining(() => prim.float = [person],
+                                            "Property must be of type 'number', got (a)");
+            TestCase.assertThrowsContaining(() => prim.double = [person],
+                                            "Property must be of type 'number', got (a)");
+            TestCase.assertThrowsContaining(() => prim.string = [person],
+                                            "Property must be of type 'string', got (a)");
+            TestCase.assertThrowsContaining(() => prim.data = [person],
+                                            "Property must be of type 'binary', got (a)");
+            TestCase.assertThrowsContaining(() => prim.date = [person],
+                                            "Property must be of type 'date', got (a)");
+            TestCase.assertThrowsContaining(() => prim.optBool = [person],
+                                            "Property must be of type 'boolean', got (a)");
+            TestCase.assertThrowsContaining(() => prim.optInt = [person],
+                                            "Property must be of type 'number', got (a)");
+            TestCase.assertThrowsContaining(() => prim.optFloat = [person],
+                                            "Property must be of type 'number', got (a)");
+            TestCase.assertThrowsContaining(() => prim.optDouble = [person],
+                                            "Property must be of type 'number', got (a)");
+            TestCase.assertThrowsContaining(() => prim.optString = [person],
+                                            "Property must be of type 'string', got (a)");
+            TestCase.assertThrowsContaining(() => prim.optData = [person],
+                                            "Property must be of type 'binary', got (a)");
+            TestCase.assertThrowsContaining(() => prim.optDate = [person],
+                                            "Property must be of type 'date', got (a)");
+
+            function testAssign(name, value) {
+                prim[name] = [value];
+                TestCase.assertSimilar(prim[name].type, prim[name][0], value, undefined, 1);
+            }
+
+            testAssign('bool', true);
+            testAssign('int', 1);
+            testAssign('float', 1.1);
+            testAssign('double', 1.1);
+            testAssign('string', 'a');
+            testAssign('data', DATA1);
+            testAssign('date', DATE1);
+
+            TestCase.assertThrowsContaining(() => prim.bool = [null],
+                                            "Property must be of type 'boolean', got (null)");
+            TestCase.assertThrowsContaining(() => prim.int = [null],
+                                            "Property must be of type 'number', got (null)");
+            TestCase.assertThrowsContaining(() => prim.float = [null],
+                                            "Property must be of type 'number', got (null)");
+            TestCase.assertThrowsContaining(() => prim.double = [null],
+                                            "Property must be of type 'number', got (null)");
+            TestCase.assertThrowsContaining(() => prim.string = [null],
+                                            "Property must be of type 'string', got (null)");
+            TestCase.assertThrowsContaining(() => prim.data = [null],
+                                            "Property must be of type 'binary', got (null)");
+            TestCase.assertThrowsContaining(() => prim.date = [null],
+                                            "Property must be of type 'date', got (null)");
+
+            testAssign('optBool', true);
+            testAssign('optInt', 1);
+            testAssign('optFloat', 1.1);
+            testAssign('optDouble', 1.1);
+            testAssign('optString', 'a');
+            testAssign('optData', DATA1);
+            testAssign('optDate', DATE1);
+
+            testAssign('optBool', null);
+            testAssign('optInt', null);
+            testAssign('optFloat', null);
+            testAssign('optDouble', null);
+            testAssign('optString', null);
+            testAssign('optData', null);
+            testAssign('optDate', null);
         });
 
-        TestCase.assertEqual(undefined, array.ablasdf);
+        TestCase.assertThrowsContaining(() => obj.arrayCol = []);
+        TestCase.assertThrowsContaining(() => prim.bool = []);
     },
 
     testListEnumerate: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var obj;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let obj;
 
-        realm.write(function() {
+        realm.write(() => {
             obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
@@ -155,19 +354,18 @@ module.exports = {
             });
         });
 
-        var index;
-        for (index in obj.arrayCol) {
+        for (const index in obj.arrayCol) {
             TestCase.assertTrue(false, "No objects should have been enumerated: " + index);
         }
 
-        realm.write(function() {
+        realm.write(() => {
             obj.arrayCol = [{doubleCol: 0}, {doubleCol: 1}];
-            TestCase.assertEqual(obj.arrayCol.length, 2);
         });
+        TestCase.assertEqual(obj.arrayCol.length, 2);
 
-        var count = 0;
-        var keys = Object.keys(obj.arrayCol);
-        for (index in obj.arrayCol) {
+        let count = 0;
+        let keys = Object.keys(obj.arrayCol);
+        for (const index in obj.arrayCol) {
             TestCase.assertEqual(count++, +index);
             TestCase.assertEqual(keys[index], index);
         }
@@ -177,11 +375,11 @@ module.exports = {
     },
 
     testListPush: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}],
@@ -199,23 +397,21 @@ module.exports = {
             TestCase.assertEqual(array[2].doubleCol, 1);
             TestCase.assertEqual(array[3].doubleCol, 2);
 
-            TestCase.assertThrows(function() {
-                array.push();
-            });
+            TestCase.assertThrowsContaining(() => array.push(), 'Invalid argument');
         });
 
         TestCase.assertEqual(array.length, 4);
-        TestCase.assertThrows(function() {
+        TestCase.assertThrowsContaining(() => {
             array.push([1]);
-        }, 'can only push in a write transaction');
+        }, "Cannot modify managed objects outside of a write transaction.");
     },
 
     testListPop: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}, {doubleCol: 4}],
@@ -228,22 +424,19 @@ module.exports = {
 
             TestCase.assertEqual(array.pop(), undefined);
 
-            TestCase.assertThrows(function() {
-                array.pop(1);
-            });
+            TestCase.assertThrowsContaining(() => array.pop(1), 'Invalid argument');
         });
 
-        TestCase.assertThrows(function() {
-            array.pop();
-        }, 'can only pop in a write transaction');
+        TestCase.assertThrowsContaining(() => array.pop(),
+                                        "Cannot modify managed objects outside of a write transaction.");
     },
 
     testListUnshift: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}],
@@ -263,17 +456,16 @@ module.exports = {
         });
 
         TestCase.assertEqual(array.length, 4);
-        TestCase.assertThrows(function() {
-            array.unshift({doubleCol: 1});
-        }, 'can only unshift in a write transaction');
+        TestCase.assertThrowsContaining(() => array.unshift({doubleCol: 1}),
+                                        'Cannot modify managed objects outside of a write transaction.');
     },
 
     testListShift: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}, {doubleCol: 4}],
@@ -286,29 +478,27 @@ module.exports = {
 
             TestCase.assertEqual(array.shift(), undefined);
 
-            TestCase.assertThrows(function() {
-                array.shift(1);
-            });
+            TestCase.assertThrowsContaining(() => array.shift(1), 'Invalid argument');
         });
 
-        TestCase.assertThrows(function() {
+        TestCase.assertThrowsContaining(() => {
             array.shift();
-        }, 'can only shift in a write transaction');
+        }, "Cannot modify managed objects outside of a write transaction.");
     },
 
     testListSplice: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}, {doubleCol: 4}],
             });
 
             array = obj.arrayCol;
-            var removed;
+            let removed;
 
             removed = array.splice(0, 0, obj.objectCol, obj.objectCol1);
             TestCase.assertEqual(removed.length, 0);
@@ -355,26 +545,26 @@ module.exports = {
             TestCase.assertEqual(removed.length, 1);
             TestCase.assertEqual(array.length, 0);
 
-            TestCase.assertThrows(function() {
+            TestCase.assertThrowsContaining(() => {
                 array.splice('cat', 1);
-            });
+            }, 'Value not convertible to a number');
 
-            TestCase.assertThrows(function() {
+            TestCase.assertThrowsContaining(() => {
                 array.splice(0, 0, 0);
-            });
+            }, 'Value not convertible to a number');
         });
 
-        TestCase.assertThrows(function() {
+        TestCase.assertThrowsContaining(() => {
             array.splice(0, 0, {doubleCol: 1});
         }, 'can only splice in a write transaction');
     },
 
     testListDeletions: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var object;
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let object;
+        let array;
 
-        realm.write(function() {
+        realm.write(() => {
             object = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
@@ -385,7 +575,7 @@ module.exports = {
         });
 
         try {
-            realm.write(function() {
+            realm.write(() => {
                 realm.delete(array[0]);
                 TestCase.assertEqual(array.length, 1);
                 TestCase.assertEqual(array[0].doubleCol, 4);
@@ -398,22 +588,20 @@ module.exports = {
         TestCase.assertEqual(array.length, 2);
         TestCase.assertEqual(array[0].doubleCol, 3);
 
-        realm.write(function() {
+        realm.write(() => {
             realm.delete(object);
         });
 
-        TestCase.assertThrows(function() {
-            array[0];
-        });
+        TestCase.assertThrowsContaining(() => array[0], 'invalidated');
     },
 
     testLiveUpdatingResults: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var objects = realm.objects('TestObject');
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let objects = realm.objects('TestObject');
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', {
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', {
                 objectCol: {doubleCol: 1},
                 objectCol1: {doubleCol: 2},
                 arrayCol: [{doubleCol: 3}, {doubleCol: 4}],
@@ -426,7 +614,7 @@ module.exports = {
         TestCase.assertEqual(objects.length, 4);
 
         try {
-            realm.write(function() {
+            realm.write(() => {
                 array.push({doubleCol: 5});
                 TestCase.assertEqual(objects.length, 5);
 
@@ -449,50 +637,50 @@ module.exports = {
     },
 
     testListSnapshot: function() {
-        var realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
-        var objects = realm.objects('TestObject');
-        var array;
+        const realm = new Realm({schema: [schemas.LinkTypes, schemas.TestObject]});
+        let objects = realm.objects('TestObject');
+        let array;
 
-        realm.write(function() {
-            var obj = realm.create('LinkTypesObject', [[1], [2], [[3], [4]]]);
+        realm.write(() => {
+            let obj = realm.create('LinkTypesObject', [[1], [2], [[3], [4]], [[5], [6]]]);
             array = obj.arrayCol;
         });
 
-        var objectsCopy = objects.snapshot();
-        var arrayCopy = array.snapshot();
+        let objectsCopy = objects.snapshot();
+        let arrayCopy = array.snapshot();
 
-        TestCase.assertEqual(objectsCopy.length, 4);
+        TestCase.assertEqual(objectsCopy.length, 6);
         TestCase.assertEqual(arrayCopy.length, 2);
 
-        realm.write(function() {
+        realm.write(() => {
             array.push([5]);
-            TestCase.assertEqual(objectsCopy.length, 4);
+            TestCase.assertEqual(objectsCopy.length, 6);
             TestCase.assertEqual(arrayCopy.length, 2);
 
-            TestCase.assertEqual(objectsCopy.snapshot().length, 4);
+            TestCase.assertEqual(objectsCopy.snapshot().length, 6);
             TestCase.assertEqual(arrayCopy.snapshot().length, 2);
 
-            TestCase.assertEqual(objects.snapshot().length, 5);
+            TestCase.assertEqual(objects.snapshot().length, 7);
             TestCase.assertEqual(array.snapshot().length, 3);
 
             realm.delete(array[0]);
-            TestCase.assertEqual(objectsCopy.length, 4);
+            TestCase.assertEqual(objectsCopy.length, 6);
             TestCase.assertEqual(arrayCopy.length, 2);
             TestCase.assertEqual(arrayCopy[0], null);
 
             realm.deleteAll();
-            TestCase.assertEqual(objectsCopy.length, 4);
+            TestCase.assertEqual(objectsCopy.length, 6);
             TestCase.assertEqual(arrayCopy.length, 2);
             TestCase.assertEqual(arrayCopy[1], null);
         });
     },
 
     testListFiltered: function() {
-        var realm = new Realm({schema: [schemas.PersonObject, schemas.PersonList]});
-        var list;
+        const realm = new Realm({schema: [schemas.PersonObject, schemas.PersonList]});
+        let list;
 
-        realm.write(function() {
-            var object = realm.create('PersonList', {list: [
+        realm.write(() => {
+            let object = realm.create('PersonList', {list: [
                 {name: 'Ari', age: 10},
                 {name: 'Tim', age: 11},
                 {name: 'Bjarne', age: 12},
@@ -515,10 +703,11 @@ module.exports = {
             {name: 'Target', properties: {value: 'int'}},
             {name: 'Mid',    properties: {value: 'int', link: 'Target'}},
             {name: 'List',   properties: {list: {type: 'list', objectType: 'Mid'}}},
+            schemas.PrimitiveArrays
         ];
         const realm = new Realm({schema: schema});
 
-        let list;
+        let list, prim;
         realm.write(() => {
             list = realm.create('List', {list: [
                 {value: 3, link: {value: 1}},
@@ -528,13 +717,31 @@ module.exports = {
             realm.create('List', {list: [
                 {value: 4, link: {value: 4}},
             ]});
+            prim = realm.create('PrimitiveArrays', {
+                bool: [true, false],
+                int: [3, 1, 2],
+                float: [3, 1, 2],
+                double: [3, 1, 2],
+                string: ['c', 'a', 'b'],
+                data: [DATA3, DATA1, DATA2],
+                date: [DATE3, DATE1, DATE2],
+                optBool: [true, false, null],
+                optInt: [3, 1, 2, null],
+                optFloat: [3, 1, 2, null],
+                optDouble: [3, 1, 2, null],
+                optString: ['c', 'a', 'b', null],
+                optData: [DATA3, DATA1, DATA2, null],
+                optDate: [DATE3, DATE1, DATE2, null],
+            });
         });
 
         const values = (results) => results.map((o) => o.value);
 
-        TestCase.assertThrows(() => list.sorted());
-        TestCase.assertThrows(() => list.sorted('nonexistent property'));
-        TestCase.assertThrows(() => list.sorted('link'));
+        // TestCase.assertThrowsContaining(() => list.sorted());
+        TestCase.assertThrowsContaining(() => list.sorted('nonexistent property'),
+                                        "Cannot sort on key path 'nonexistent property': property 'Mid.nonexistent property' does not exist.");
+        TestCase.assertThrowsContaining(() => list.sorted('link'),
+                                        "Cannot sort on key path 'link': property 'Mid.link' of type 'object' cannot be the final property in the key path.");
 
         TestCase.assertArraysEqual(values(list.sorted([])), [3, 1, 2]);
 
@@ -551,13 +758,51 @@ module.exports = {
         TestCase.assertArraysEqual(values(list.sorted(['link.value'])), [3, 2, 1]);
         TestCase.assertArraysEqual(values(list.sorted([['link.value', false]])), [3, 2, 1]);
         TestCase.assertArraysEqual(values(list.sorted([['link.value', true]])), [1, 2, 3]);
+
+        TestCase.assertThrowsContaining(() => prim.int.sorted('value', true),
+                                        "Cannot sort on key path 'value': arrays of 'int' can only be sorted on 'self'");
+        TestCase.assertThrowsContaining(() => prim.int.sorted('!ARRAY_VALUE', true),
+                                        "Cannot sort on key path '!ARRAY_VALUE': arrays of 'int' can only be sorted on 'self'");
+        TestCase.assertThrowsContaining(() => prim.int.sorted('self', true));
+
+        let objects = obj.list.sorted([]);
+        TestCase.assertArraysEqual(objects.map((o) => o.name), ['Ari', 'Tim', 'Bjarne', 'Alex']);
+
+        objects = obj.list.sorted('name', true);
+        TestCase.assertArraysEqual(objects.map((o) => o.name), ['Tim', 'Bjarne', 'Ari', 'Alex']);
+
+        objects = obj.list.sorted(['age', 'name']);
+        TestCase.assertArraysEqual(objects.map((o) => o.name), ['Ari', 'Tim', 'Alex', 'Bjarne']);
+
+        TestCase.assertArraysEqual(prim.int.sorted([]), [3, 1, 2]);
+        TestCase.assertArraysEqual(prim.int.sorted(), [1, 2, 3]);
+        TestCase.assertArraysEqual(prim.int.sorted(true), [1, 2, 3]);
+        TestCase.assertArraysEqual(prim.int.sorted(false), [3, 2, 1]);
+
+        TestCase.assertArraysEqual(prim.optInt.sorted([]), [3, 1, 2, null]);
+        TestCase.assertArraysEqual(prim.optInt.sorted(), [1, 2, 3, null]);
+        TestCase.assertArraysEqual(prim.optInt.sorted(true), [1, 2, 3, null]);
+        TestCase.assertArraysEqual(prim.optInt.sorted(false), [null, 3, 2, 1]);
+
+        TestCase.assertArraysEqual(prim.bool.sorted(), [false, true]);
+        TestCase.assertArraysEqual(prim.float.sorted(), [1, 2, 3]);
+        TestCase.assertArraysEqual(prim.double.sorted(), [1, 2, 3]);
+        TestCase.assertArraysEqual(prim.string.sorted(), ['a', 'b', 'c']);
+        TestCase.assertArraysEqual(prim.data.sorted(), [DATA1, DATA2, DATA3]);
+        TestCase.assertArraysEqual(prim.date.sorted(), [DATE1, DATE2, DATE3]);
+        TestCase.assertArraysEqual(prim.optBool.sorted(), [false, true, null]);
+        TestCase.assertArraysEqual(prim.optFloat.sorted(), [1, 2, 3, null]);
+        TestCase.assertArraysEqual(prim.optDouble.sorted(), [1, 2, 3, null]);
+        TestCase.assertArraysEqual(prim.optString.sorted(), ['a', 'b', 'c', null]);
+        TestCase.assertArraysEqual(prim.optData.sorted(), [DATA1, DATA2, DATA3, null]);
+        TestCase.assertArraysEqual(prim.optDate.sorted(), [DATE1, DATE2, DATE3, null]);
     },
 
     testArrayMethods: function() {
-        var realm = new Realm({schema: [schemas.PersonObject, schemas.PersonList]});
-        var object;
+        const realm = new Realm({schema: [schemas.PersonObject, schemas.PersonList]});
+        let object;
 
-        realm.write(function() {
+        realm.write(() => {
             object = realm.create('PersonList', {list: [
                 {name: 'Ari', age: 10},
                 {name: 'Tim', age: 11},
@@ -565,10 +810,7 @@ module.exports = {
             ]});
         });
 
-        [
-            object.list,
-            realm.objects('PersonObject'),
-        ].forEach(function(list) {
+        for (const list of [object.list, realm.objects('PersonObject')]) {
             TestCase.assertEqual(list.slice().length, 3);
             TestCase.assertEqual(list.slice(-1).length, 1);
             TestCase.assertEqual(list.slice(-1)[0].age, 12);
@@ -581,43 +823,43 @@ module.exports = {
                 TestCase.assertEqual(list.join(' '), 'Ari Tim Bjarne');
             }
 
-            var count = 0;
-            list.forEach(function(p, i) {
+            let count = 0;
+            list.forEach((p, i) => {
                 TestCase.assertEqual(p.name, list[i].name);
                 count++;
             });
             TestCase.assertEqual(count, list.length);
 
-            TestCase.assertArraysEqual(list.map(function(p) {return p.age}), [10, 11, 12]);
-            TestCase.assertTrue(list.some(function(p) {return p.age > 10}));
-            TestCase.assertTrue(list.every(function(p) {return p.age > 0}));
+            TestCase.assertArraysEqual(list.map(p => p.age), [10, 11, 12]);
+            TestCase.assertTrue(list.some(p => p.age > 10));
+            TestCase.assertTrue(list.every(p => p.age > 0));
 
-            var person = list.find(function(p) {return p.name == 'Tim'});
+            let person = list.find(p => p.name == 'Tim');
             TestCase.assertEqual(person.name, 'Tim');
 
-            var index = list.findIndex(function(p) {return p.name == 'Tim'});
+            let index = list.findIndex(p => p.name == 'Tim');
             TestCase.assertEqual(index, 1);
             TestCase.assertEqual(list.indexOf(list[index]), index);
 
-            TestCase.assertEqual(list.reduce(function(n, p) {return n + p.age}, 0), 33);
-            TestCase.assertEqual(list.reduceRight(function(n, p) {return n + p.age}, 0), 33);
+            TestCase.assertEqual(list.reduce((n, p) => n + p.age, 0), 33);
+            TestCase.assertEqual(list.reduceRight((n, p) => n + p.age, 0), 33);
 
             // eslint-disable-next-line no-undef
-            var iteratorMethodNames = ['entries', 'keys', 'values'];
+            let iteratorMethodNames = ['entries', 'keys', 'values'];
 
             iteratorMethodNames.push(Symbol.iterator);
 
-            iteratorMethodNames.forEach(function(methodName) {
-                var iterator = list[methodName]();
-                var count = 0;
-                var result;
+            iteratorMethodNames.forEach(methodName => {
+                let iterator = list[methodName]();
+                let count = 0;
+                let result;
 
                 // This iterator should itself be iterable.
                 // TestCase.assertEqual(iterator[iteratorSymbol](), iterator);
                 TestCase.assertEqual(iterator[Symbol.iterator](), iterator);
 
                 while ((result = iterator.next()) && !result.done) {
-                    var value = result.value;
+                    let value = result.value;
 
                     switch (methodName) {
                         case 'entries':
@@ -640,14 +882,14 @@ module.exports = {
                 TestCase.assertEqual(result.value, undefined);
                 TestCase.assertEqual(count, list.length);
             });
-        });
+        }
     },
 
     testIsValid: function() {
-        var realm = new Realm({schema: [schemas.PersonObject, schemas.PersonList]});
-        var object;
-        var list;
-        realm.write(function() {
+        const realm = new Realm({schema: [schemas.PersonObject, schemas.PersonList]});
+        let object;
+        let list;
+        realm.write(() => {
             object = realm.create('PersonList', {list: [
                 {name: 'Ari', age: 10},
                 {name: 'Tim', age: 11},
@@ -659,8 +901,6 @@ module.exports = {
         });
 
         TestCase.assertEqual(list.isValid(), false);
-        TestCase.assertThrows(function() {
-            list.length;
-        });
+        TestCase.assertThrowsContaining(() => list.length, 'invalidated');
     },
 };
